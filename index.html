@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบลงทะเบียนวันครู (GPS Locked)</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- html2canvas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: #111;
+            /* ลายพื้นหลังแบบ CSS เพื่อป้องกัน Error */
+            background-image: radial-gradient(#333 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        
+        /* ธีมสีทอง-ดำ */
+        .card-gradient {
+            background: linear-gradient(180deg, #3d422d 0%, #1f2416 100%);
+            border: 2px solid #eebb44;
+        }
+        
+        .text-gold { color: #eebb44; }
+        .bg-gold { background-color: #eebb44; }
+        .border-gold { border-color: #eebb44; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <!-- Config พิกัด -->
+    <script>
+        // ==========================================
+        // ⚙️ ตั้งค่าพิกัดสถานที่จัดงาน
+        // ==========================================
+        const EVENT_LAT = 8.30028; // ตัวอย่าง: ละติจูด
+        const EVENT_LNG = 99.39213; // ตัวอย่าง: ลองจิจูด
+        const MAX_DISTANCE_METERS = 500; // รัศมีที่ยอมรับได้ (เมตร)
+        // ==========================================
+    </script>
+
+    <!-- ฟอร์มลงทะเบียน -->
+    <div id="input-section" class="w-full max-w-md bg-white/10 backdrop-blur-md border border-white/20 p-6 rounded-2xl shadow-2xl text-white relative">
+        
+        <!-- แจ้งเตือน LINE -->
+        <div id="line-alert" class="hidden bg-yellow-600/20 border border-yellow-500/50 rounded-lg p-3 mb-4 text-sm text-yellow-200 flex items-start gap-2">
+            <svg class="w-5 h-5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            <div>
+                <strong>คำแนะนำ:</strong> หากเปิดผ่าน LINE กรุณากดปุ่ม 3 จุดมุมบนขวา เลือก "เปิดในเบราว์เซอร์อื่น" เพื่อใช้งาน GPS
+            </div>
+        </div>
+
+        <!-- สถานะ GPS -->
+        <div id="gps-status" class="absolute top-4 right-4 text-xs text-gray-400 flex items-center gap-1">
+            <span id="status-dot" class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span> 
+            <span id="status-text">รอพิกัด...</span>
+        </div>
+
+        <div class="text-center mb-6">
+            <h1 class="text-2xl font-bold text-gold">ลงทะเบียนร่วมงาน</h1>
+            <p class="text-gray-300 text-sm">วันครูแห่งชาติ ครั้งที่ 70</p>
+        </div>
+
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm mb-1 text-gray-300">ชื่อ-นามสกุล</label>
+                <input type="text" id="inputName" placeholder="เช่น นายสมชาย ใจดี" class="w-full p-3 rounded-lg bg-black/50 border border-gray-600 text-white focus:outline-none focus:border-gold transition">
+            </div>
+            
+            <div>
+                <label class="block text-sm mb-1 text-gray-300">ตำแหน่ง</label>
+                <div class="relative">
+                    <select id="inputPosition" class="w-full p-3 rounded-lg bg-black/50 border border-gray-600 text-white focus:outline-none focus:border-gold transition appearance-none cursor-pointer">
+                        <option value="" disabled selected>-- กรุณาเลือกตำแหน่ง --</option>
+                        <option value="ครู">ครู</option>
+                        <option value="ผู้บริหาร">ผู้บริหาร</option>
+                        <option value="บุคลากรทางการศึกษา">บุคลากรทางการศึกษา</option>
+                        <option value="แขกผู้มีเกียรติ">แขกผู้มีเกียรติ</option>
+                        <option value="อื่นๆ">อื่นๆ</option>
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
+                        <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm mb-1 text-gray-300">สังกัด</label>
+                <input type="text" id="inputOrg" placeholder="เช่น โรงเรียนบ้านนาวิทยาคม" class="w-full p-3 rounded-lg bg-black/50 border border-gray-600 text-white focus:outline-none focus:border-gold transition">
+            </div>
+
+            <button onclick="handleMainButtonClick()" id="submitBtn" class="w-full bg-gray-600 text-white font-bold py-3 rounded-lg cursor-not-allowed transition transform shadow-lg mt-4 flex justify-center items-center gap-2" disabled>
+                <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                กำลังค้นหาพิกัด...
+            </button>
+        </div>
+
+        <div class="mt-4 text-center text-[10px] text-gray-400">
+            ผู้จัดทำ: ปฏิเวท นะวะมวัฒน์
+        </div>
+    </div>
+
+    <!-- ผลลัพธ์บัตรเช็คอิน -->
+    <div id="result-section" class="hidden flex-col items-center w-full max-w-sm">
+        
+        <div id="capture-area" class="w-full card-gradient rounded-3xl p-6 text-center shadow-2xl relative overflow-hidden">
+            
+            <div class="w-20 h-20 bg-gold rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg border-4 border-[#3d422d]">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+            </div>
+
+            <h2 class="text-gold text-2xl font-bold mb-1">Check-in สำเร็จ</h2>
+            <p class="text-white/80 text-sm mb-6">งานวันครูแห่งชาติ ครั้งที่ 70</p>
+
+            <div class="bg-black/20 rounded-xl p-4 mb-6 border border-white/10 text-left space-y-2">
+                <p class="text-white text-lg font-semibold truncate"><span class="text-gold text-sm font-normal block">ชื่อ-สกุล:</span> <span id="displayName">-</span></p>
+                <p class="text-white text-md truncate"><span class="text-gold text-sm font-normal block">ตำแหน่ง:</span> <span id="displayPosition">-</span></p>
+                <p class="text-white text-md truncate"><span class="text-gold text-sm font-normal block">สถานที่:</span> <span id="displayOrg">-</span></p>
+            </div>
+
+            <div class="border-t border-b border-white/10 py-4 mb-2">
+                <!-- ปรับแก้ข้อความตรงนี้ -->
+                <p class="text-gray-400 text-xs uppercase tracking-widest mb-1">เวลาลงทะเบียน</p>
+                <div id="realtime-clock" class="text-4xl font-bold text-gold font-mono tracking-wider">00:00:00</div>
+                <div id="current-date" class="text-white text-sm mt-1"></div>
+            </div>
+
+            <!-- แสดงพิกัดที่ยืนยันแล้ว -->
+            <div class="mt-2 flex items-center justify-center text-green-400 text-[10px] gap-1 bg-green-900/30 py-1 rounded border border-green-500/30">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                <span id="location-text">Verified Location</span>
+            </div>
+
+            <div class="mt-2 text-[10px] text-gray-500 opacity-60">
+                ผู้จัดทำ: ปฏิเวท นะวะมวัฒน์
+            </div>
+        </div>
+
+        <div class="mt-6 w-full space-y-3">
+            <button id="saveBtn" onclick="handleSave()" class="w-full bg-gold text-black font-bold py-3 rounded-full hover:bg-yellow-400 transition flex items-center justify-center gap-2 shadow-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                บันทึกบัตรเช็คอิน
+            </button>
+            <button onclick="location.reload()" class="w-full text-gray-400 text-sm underline">กลับหน้าหลัก</button>
+        </div>
+    </div>
+
+    <script>
+        const isLine = /Line/i.test(navigator.userAgent);
+        if (isLine) document.getElementById('line-alert').classList.remove('hidden');
+
+        // === GPS Logic ===
+        let userLat = 0, userLng = 0, isLocationValid = false;
+
+        function initGPS() {
+            const btn = document.getElementById('submitBtn');
+            updateStatus("กำลังค้นหาพิกัด...", "yellow");
+            btn.innerHTML = `<svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> กำลังค้นหาพิกัด...`;
+            btn.disabled = true;
+            btn.className = "w-full bg-gray-600 text-white font-bold py-3 rounded-lg cursor-not-allowed transition transform shadow-lg mt-4 flex justify-center items-center gap-2";
+
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userLat = position.coords.latitude;
+                        userLng = position.coords.longitude;
+                        checkDistance(userLat, userLng);
+                    },
+                    (error) => {
+                        let msg = "ไม่พบพิกัด";
+                        if(error.code === error.PERMISSION_DENIED) msg = "ถูกปฏิเสธสิทธิ์";
+                        else if(error.code === error.TIMEOUT) msg = "หมดเวลา";
+                        handleGPSError(msg + " (แตะเพื่อลองใหม่)");
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            } else {
+                handleGPSError("ไม่รองรับ GPS");
+            }
+        }
+
+        function handleGPSError(msg) {
+            updateStatus("ไม่พบตำแหน่ง", "red");
+            const btn = document.getElementById('submitBtn');
+            btn.innerHTML = "🔄 " + msg;
+            btn.disabled = false;
+            btn.className = "w-full bg-yellow-600 text-white font-bold py-3 rounded-lg hover:bg-yellow-500 transition transform shadow-lg mt-4 flex justify-center items-center gap-2";
+            isLocationValid = false;
+        }
+
+        function checkDistance(lat, lng) {
+            const distance = getDistanceFromLatLonInKm(lat, lng, EVENT_LAT, EVENT_LNG);
+            const btn = document.getElementById('submitBtn');
+
+            if (distance <= MAX_DISTANCE_METERS) {
+                isLocationValid = true;
+                btn.disabled = false;
+                btn.className = "w-full bg-gold text-black font-bold py-3 rounded-lg hover:bg-yellow-400 transition transform active:scale-95 shadow-lg mt-4 flex justify-center items-center gap-2";
+                btn.innerHTML = `ยืนยันการเช็คอิน (ห่าง ${Math.floor(distance)} ม.)`;
+                updateStatus("✅ พิกัดถูกต้อง", "green");
+            } else {
+                isLocationValid = false;
+                btn.disabled = false; // ให้กด Retry ได้
+                btn.className = "w-full bg-red-800 text-white font-bold py-3 rounded-lg hover:bg-red-700 transition transform shadow-lg mt-4 flex justify-center items-center gap-2";
+                btn.innerHTML = `❌ อยู่นอกพื้นที่ (${Math.floor(distance)} ม.) กดเช็คใหม่`;
+                updateStatus("❌ อยู่นอกเขต", "red");
+            }
+        }
+
+        function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+            var R = 6371; 
+            var dLat = deg2rad(lat2-lat1);
+            var dLon = deg2rad(lon2-lon1); 
+            var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon/2) * Math.sin(dLon/2); 
+            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+            return R * c * 1000; 
+        }
+
+        function deg2rad(deg) { return deg * (Math.PI/180); }
+
+        function updateStatus(text, color) {
+            const dot = document.getElementById('status-dot');
+            const txt = document.getElementById('status-text');
+            const colorClass = color === 'green' ? 'bg-green-500' : (color === 'red' ? 'bg-red-500' : 'bg-yellow-500');
+            dot.className = `w-2 h-2 rounded-full ${colorClass} ${color === 'yellow' ? 'animate-pulse' : ''}`;
+            txt.innerText = text;
+            txt.className = color === 'red' ? 'text-red-400' : (color === 'green' ? 'text-green-400' : 'text-gray-400');
+        }
+
+        function handleMainButtonClick() {
+            if (isLocationValid) submitForm(); else initGPS();
+        }
+
+        window.onload = initGPS;
+
+        // === Form Logic ===
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('realtime-clock').innerText = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            document.getElementById('current-date').innerText = now.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' });
+        }
+        setInterval(updateClock, 1000); updateClock();
+
+        function submitForm() {
+            const name = document.getElementById('inputName').value;
+            const pos = document.getElementById('inputPosition').value;
+            const org = document.getElementById('inputOrg').value;
+
+            if (!name || !pos || !org) return alert("กรุณากรอกข้อมูลให้ครบถ้วน");
+
+            document.getElementById('displayName').innerText = name;
+            document.getElementById('displayPosition').innerText = pos;
+            document.getElementById('displayOrg').innerText = org;
+            document.getElementById('location-text').innerText = `Verified Location: ${userLat.toFixed(5)}, ${userLng.toFixed(5)}`;
+
+            document.getElementById('input-section').classList.add('hidden');
+            document.getElementById('result-section').classList.remove('hidden');
+            document.getElementById('result-section').classList.add('flex');
+        }
+
+        async function handleSave() {
+            const btn = document.getElementById('saveBtn');
+            const originalText = btn.innerHTML;
+            btn.innerText = "กำลังประมวลผล..."; btn.disabled = true;
+            
+            try {
+                const canvas = await html2canvas(document.getElementById('capture-area'), { 
+                    scale: 3, 
+                    backgroundColor: '#111', // สีพื้นหลังให้เข้ากับธีม
+                    useCORS: false,
+                    logging: false
+                });
+
+                canvas.toBlob(async function(blob) {
+                    if (!blob) return alert("สร้างไฟล์ไม่สำเร็จ");
+                    const file = new File([blob], 'TeacherDay-CheckIn.png', { type: 'image/png' });
+
+                    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                        try {
+                            await navigator.share({ files: [file] });
+                        } catch (err) { console.log("Share skipped"); }
+                    } else {
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `TeacherDay-CheckIn-${Date.now()}.png`;
+                        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+                        setTimeout(() => URL.revokeObjectURL(url), 1000);
+                    }
+                    setTimeout(() => { btn.innerHTML = originalText; btn.disabled = false; }, 1000);
+                }, 'image/png');
+            } catch (err) { 
+                console.error(err); alert("เกิดข้อผิดพลาด"); 
+                btn.innerHTML = originalText; btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
